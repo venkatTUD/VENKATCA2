@@ -87,6 +87,7 @@ jobs:
               uri: https://${{ secrets.REPO_USERNAME }}:${{ secrets.REPO_TOKEN }}@github.com/venkatTUD/VENKATCA2.git
               ref: main
             contextDir: frontend-ca2
+            noCache: true
           strategy:
             type: Docker
             dockerStrategy:
@@ -110,6 +111,7 @@ jobs:
               uri: https://${{ secrets.REPO_USERNAME }}:${{ secrets.REPO_TOKEN }}@github.com/venkatTUD/VENKATCA2.git
               ref: main
             contextDir: backend-ca2
+            noCache: true
           strategy:
             type: Docker
             dockerStrategy:

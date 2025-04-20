@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: image-registry.openshift-image-registry.svc:5000
-  PROJECT_NAME: recipe-app
+  PROJECT_NAME: venkatakurathitud-dev
 
 jobs:
   deploy:

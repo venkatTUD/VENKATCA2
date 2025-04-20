@@ -1,0 +1,50 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: openshift-project-setup
+  labels:
+    provider: openshift
+spec:
+  compositeTypeRef:
+    apiVersion: project.venkatakurathi.com/v1alpha1
+    kind: XProject
+  resources:
+    - name: openshift-project
+      base:
+        apiVersion: openshift.crossplane.io/v1alpha1
+        kind: Project
+        spec:
+          forProvider:
+            displayName: Recipe Application Project
+            description: Project for recipe application deployment
+    - name: service-account
+      base:
+        apiVersion: openshift.crossplane.io/v1alpha1
+        kind: ServiceAccount
+        spec:
+          forProvider:
+            projectName: recipe-app
+            name: github-actions
+    - name: role-binding
+      base:
+        apiVersion: openshift.crossplane.io/v1alpha1
+        kind: RoleBinding
+        spec:
+          forProvider:
+            projectName: recipe-app
+            roleRef:
+              name: edit
+            subjects:
+              - kind: ServiceAccount
+                name: github-actions
+                namespace: recipe-app
+
+---
+apiVersion: project.venkatakurathi.com/v1alpha1
+kind: XProject
+metadata:
+  name: recipe-app-project
+spec:
+  compositionSelector:
+    matchLabels:
+      provider: openshift 

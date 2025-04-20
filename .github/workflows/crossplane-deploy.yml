@@ -1,0 +1,101 @@
+name: Crossplane Deployment
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: image-registry.openshift-image-registry.svc:5000
+  PROJECT_NAME: recipe-app
+  OPENSHIFT_SERVER: https://api.rm3.7wse.p1.openshiftapps.com:6443
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Crossplane CLI
+      run: |
+        curl -sL https://raw.githubusercontent.com/crossplane/crossplane/master/install.sh | sh
+        sudo mv kubectl-crossplane /usr/local/bin/
+
+    - name: Install OpenShift CLI
+      run: |
+        curl -L https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz | tar xvz
+        sudo mv oc /usr/local/bin/
+
+    - name: Login to OpenShift
+      run: |
+        oc login --token=${{ secrets.OPENSHIFT_TOKEN }} --server=${{ env.OPENSHIFT_SERVER }} || {
+          echo "Failed to login to OpenShift. Please verify your token."
+          exit 1
+        }
+
+    - name: Install Crossplane in OpenShift
+      run: |
+        helm repo add crossplane-stable https://charts.crossplane.io/stable
+        helm repo update
+        helm install crossplane --namespace crossplane-system --create-namespace crossplane-stable/crossplane
+
+    - name: Wait for Crossplane to be ready
+      run: |
+        kubectl wait --for=condition=Available deployment/crossplane -n crossplane-system --timeout=300s
+
+    - name: Install OpenShift Provider
+      run: |
+        kubectl crossplane install provider crossplane/provider-openshift:v0.1.0
+
+    - name: Setup Project and Service Account
+      run: |
+        # Apply the project setup configuration
+        kubectl apply -f definitions/crossplane/project/crossplane-project.yaml
+        
+        # Wait for project to be ready
+        kubectl wait --for=condition=Ready xproject/recipe-app-project --timeout=300s
+        
+        # Get the service account token
+        SA_TOKEN=$(oc serviceaccounts get-token github-actions -n recipe-app)
+        
+        # Add the token to GitHub secrets
+        echo "OPENSHIFT_TOKEN=$SA_TOKEN" >> $GITHUB_ENV
+
+    - name: Create Crossplane Configuration
+      run: |
+        export GIT_REPO=${{ github.repositoryUrl }}
+        export REGISTRY=$REGISTRY
+        envsubst < definitions/crossplane/application/crossplane-config.yaml | kubectl apply -f -
+
+    - name: Create Recipe App Instance
+      run: |
+        kubectl apply -f - <<EOF
+        apiVersion: recipeapp.venkatakurathi.com/v1alpha1
+        kind: XRecipeApp
+        metadata:
+          name: recipe-app
+        spec:
+          compositionSelector:
+            matchLabels:
+              provider: openshift
+        EOF
+
+    - name: Wait for deployment
+      run: |
+        kubectl wait --for=condition=Ready xrecipeapp/recipe-app --timeout=300s
+
+    - name: Get route URL
+      run: |
+        ROUTE_URL=$(oc get route recipe-app -o jsonpath='{.spec.host}')
+        echo "Application URL: https://$ROUTE_URL"
+        echo "ROUTE_URL=$ROUTE_URL" >> $GITHUB_ENV
+
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "Deployment successful! Application is available at: https://${{ env.ROUTE_URL }}"
+        else
+          echo "Deployment failed. Check the logs for details."
+        fi 

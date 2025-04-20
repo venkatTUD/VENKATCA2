@@ -1,0 +1,100 @@
+apiVersion: pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: openshift-recipe-app
+spec:
+  package: xpkg.upbound.io/venkatakurathi/openshift-recipe-app:v0.1.0
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: openshift-recipe-app
+  labels:
+    provider: openshift
+spec:
+  compositeTypeRef:
+    apiVersion: recipeapp.venkatakurathi.com/v1alpha1
+    kind: XRecipeApp
+  resources:
+    - name: openshift-project
+      base:
+        apiVersion: openshift.crossplane.io/v1alpha1
+        kind: Project
+        spec:
+          forProvider:
+            displayName: Recipe Application
+            description: Recipe application deployment in DevSpaces
+    - name: openshift-buildconfig
+      base:
+        apiVersion: openshift.crossplane.io/v1alpha1
+        kind: BuildConfig
+        spec:
+          forProvider:
+            projectName: recipe-app
+            source:
+              type: Git
+              git:
+                uri: ${GIT_REPO}
+                ref: main
+            strategy:
+              type: Docker
+              dockerStrategy:
+                dockerfilePath: Dockerfile
+            output:
+              to:
+                kind: ImageStreamTag
+                name: recipe-app:latest
+    - name: openshift-deployment
+      base:
+        apiVersion: openshift.crossplane.io/v1alpha1
+        kind: DeploymentConfig
+        spec:
+          forProvider:
+            projectName: recipe-app
+            replicas: 1
+            template:
+              spec:
+                containers:
+                  - name: frontend
+                    image: ${REGISTRY}/recipe-app:latest
+                    ports:
+                      - containerPort: 3000
+                    env:
+                      - name: NODE_ENV
+                        value: production
+                      - name: BACKEND_URL
+                        value: http://backend:8080
+                  - name: backend
+                    image: ${REGISTRY}/recipe-app:latest
+                    ports:
+                      - containerPort: 8080
+                    env:
+                      - name: SPRING_PROFILES_ACTIVE
+                        value: production
+                      - name: MONGODB_URI
+                        value: mongodb://mongo:27017/recipe
+                  - name: mongo
+                    image: mongo:latest
+                    ports:
+                      - containerPort: 27017
+                    volumeMounts:
+                      - name: mongodb-data
+                        mountPath: /data/db
+                volumes:
+                  - name: mongodb-data
+                    persistentVolumeClaim:
+                      claimName: mongodb-pvc
+    - name: openshift-route
+      base:
+        apiVersion: openshift.crossplane.io/v1alpha1
+        kind: Route
+        spec:
+          forProvider:
+            projectName: recipe-app
+            to:
+              kind: Service
+              name: recipe-app
+            port:
+              targetPort: 3000
+            host: recipe-app.apps.rm3.7wse.p1.openshiftapps.com 

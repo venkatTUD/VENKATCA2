@@ -1,0 +1,92 @@
+name: Deploy to OpenShift
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: image-registry.openshift-image-registry.svc:5000
+  PROJECT_NAME: recipe-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install OpenShift CLI
+      run: |
+        curl -L https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz | tar xvz
+        sudo mv oc /usr/local/bin/
+
+    - name: Login to OpenShift
+      run: |
+        oc login --server=${{ secrets.OPENSHIFT_SERVER }} \
+          --token=${{ secrets.OPENSHIFT_TOKEN }} \
+          --insecure-skip-tls-verify=true
+
+    - name: Create or switch to project
+      run: |
+        oc new-project $PROJECT_NAME || oc project $PROJECT_NAME
+
+    - name: Create image streams
+      run: |
+        oc create -f - <<EOF
+        apiVersion: image.openshift.io/v1
+        kind: ImageStream
+        metadata:
+          name: recipe-app-frontend
+        spec:
+          lookupPolicy:
+            local: false
+        ---
+        apiVersion: image.openshift.io/v1
+        kind: ImageStream
+        metadata:
+          name: recipe-app-backend
+        spec:
+          lookupPolicy:
+            local: false
+        EOF
+
+    - name: Create build configurations
+      run: |
+        export REGISTRY=$REGISTRY
+        export GIT_REPO=${{ github.repositoryUrl }}
+        envsubst < openshift-build.yaml | oc create -f -
+
+    - name: Start builds
+      run: |
+        oc start-build recipe-app-frontend
+        oc start-build recipe-app-backend
+
+    - name: Wait for builds to complete
+      run: |
+        oc wait --for=condition=complete build/recipe-app-frontend --timeout=10m
+        oc wait --for=condition=complete build/recipe-app-backend --timeout=10m
+
+    - name: Create deployment configuration
+      run: |
+        export REGISTRY=$REGISTRY
+        envsubst < openshift-deployment.yaml | oc create -f -
+
+    - name: Wait for deployment to complete
+      run: |
+        oc rollout status dc/recipe-app --timeout=10m
+
+    - name: Get route URL
+      run: |
+        ROUTE_URL=$(oc get route recipe-app-route -o jsonpath='{.spec.host}')
+        echo "Application URL: http://$ROUTE_URL"
+        echo "ROUTE_URL=$ROUTE_URL" >> $GITHUB_ENV
+
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "Deployment successful! Application is available at: http://${{ env.ROUTE_URL }}"
+        else
+          echo "Deployment failed. Check the logs for details."
+        fi 

@@ -51,11 +51,23 @@ jobs:
             local: false
         EOF
 
+    - name: Create GitHub credentials secret
+      run: |
+        oc create secret generic github-credentials \
+          --from-literal=username=${{ secrets.REPO_USERNAME }} \
+          --from-literal=password=${{ secrets.REPO_TOKEN }} \
+          --type=kubernetes.io/basic-auth
+
     - name: Create or update build configurations
       run: |
         export REGISTRY=$REGISTRY
         export GIT_REPO=https://github.com/venkatTUD/VENKATCA2.git
         envsubst < openshift/build/build-config.yaml | oc apply -f -
+
+    - name: Update build configurations with GitHub credentials
+      run: |
+        oc patch bc/recipe-app-frontend -p '{"spec":{"source":{"sourceSecret":{"name":"github-credentials"}}}}'
+        oc patch bc/recipe-app-backend -p '{"spec":{"source":{"sourceSecret":{"name":"github-credentials"}}}}'
 
     - name: Start builds
       run: |

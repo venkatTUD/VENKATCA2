@@ -1,0 +1,24 @@
+{
+  "name": "bp_web_app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "fe-server.js",
+  "scripts": {
+    "test": "mocha test/*.spec.js",
+    "test:lighthouse": "mocha test/lighthouse.spec.js",
+    "test:all": "npm run test && npm run test:lighthouse"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "querystring": "^0.2.1"
+  },
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "chrome-launcher": "^0.15.2",
+    "lighthouse": "^10.3.0",
+    "mocha": "^10.2.0",
+    "sinon": "^15.1.0"
+  }
+} 

@@ -51,11 +51,11 @@ jobs:
             local: false
         EOF
 
-    - name: Create build configurations
+    - name: Create or update build configurations
       run: |
         export REGISTRY=$REGISTRY
         export GIT_REPO=${{ github.repositoryUrl }}
-        envsubst < openshift/build/build-config.yaml | oc create -f -
+        envsubst < openshift/build/build-config.yaml | oc apply -f -
 
     - name: Start builds
       run: |

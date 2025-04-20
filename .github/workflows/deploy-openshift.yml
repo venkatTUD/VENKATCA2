@@ -31,9 +31,9 @@ jobs:
       run: |
         oc new-project $PROJECT_NAME || oc project $PROJECT_NAME
 
-    - name: Create image streams
+    - name: Create or update image streams
       run: |
-        oc create -f - <<EOF
+        oc apply -f - <<EOF
         apiVersion: image.openshift.io/v1
         kind: ImageStream
         metadata:

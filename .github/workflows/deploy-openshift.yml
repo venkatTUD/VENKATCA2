@@ -55,7 +55,7 @@ jobs:
       run: |
         export REGISTRY=$REGISTRY
         export GIT_REPO=${{ github.repositoryUrl }}
-        envsubst < openshift-build.yaml | oc create -f -
+        envsubst < openshift/build/build-config.yaml | oc create -f -
 
     - name: Start builds
       run: |
@@ -70,11 +70,17 @@ jobs:
     - name: Create deployment configuration
       run: |
         export REGISTRY=$REGISTRY
-        envsubst < openshift-deployment.yaml | oc create -f -
+        envsubst < openshift/deploy/deployment-config.yaml | oc create -f -
 
-    - name: Wait for deployment to complete
+    - name: Create route configuration
       run: |
-        oc rollout status dc/recipe-app --timeout=10m
+        oc create -f openshift/deploy/route-config.yaml
+
+    - name: Wait for deployments to complete
+      run: |
+        oc rollout status deployment/recipe-app-frontend --timeout=10m
+        oc rollout status deployment/recipe-app-backend --timeout=10m
+        oc rollout status deployment/mongodb --timeout=10m
 
     - name: Get route URL
       run: |
@@ -89,4 +95,70 @@ jobs:
           echo "Deployment successful! Application is available at: http://${{ env.ROUTE_URL }}"
         else
           echo "Deployment failed. Check the logs for details."
-        fi 
+        fi
+
+    - name: Add MongoDB configuration
+      run: |
+        oc create -f - <<EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: mongodb
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: recipe-app
+              component: mongodb
+          template:
+            metadata:
+              labels:
+                app: recipe-app
+                component: mongodb
+            spec:
+              containers:
+              - name: mongodb
+                image: mongo:latest
+                ports:
+                - containerPort: 27017
+                volumeMounts:
+                - name: mongodb-data
+                  mountPath: /data/db
+              volumes:
+              - name: mongodb-data
+                persistentVolumeClaim:
+                  claimName: mongodb-pvc
+        ---
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: mongodb-pvc
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: mongodb
+        spec:
+          ports:
+          - port: 27017
+            targetPort: 27017
+          selector:
+            app: recipe-app
+            component: mongodb
+        EOF
+
+    - name: Add Health Checks
+      run: |
+        oc patch dc recipe-app -p '{"spec":{"template":{"spec":{"containers":[{"name":"recipe-app-frontend","livenessProbe":{"httpGet":{"path":"/health","port":3000}},"livenessProbe":{"httpGet":{"path":"/health","port":3000}},"readinessProbe":{"httpGet":{"path":"/health","port":3000}},"readinessProbe":{"httpGet":{"path":"/health","port":3000}}}]}}}}'
+        oc patch dc recipe-app -p '{"spec":{"template":{"spec":{"containers":[{"name":"recipe-app-backend","livenessProbe":{"httpGet":{"path":"/health","port":3000}},"livenessProbe":{"httpGet":{"path":"/health","port":3000}},"readinessProbe":{"httpGet":{"path":"/health","port":3000}},"readinessProbe":{"httpGet":{"path":"/health","port":3000}}}]}}}}'
+
+    - name: Add Resource Limits
+      run: |
+        oc patch dc recipe-app -p '{"spec":{"template":{"spec":{"containers":[{"name":"recipe-app-frontend","resources":{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"200m","memory":"256Mi"}},"livenessProbe":{"httpGet":{"path":"/health","port":3000}},"livenessProbe":{"httpGet":{"path":"/health","port":3000}},"readinessProbe":{"httpGet":{"path":"/health","port":3000}},"readinessProbe":{"httpGet":{"path":"/health","port":3000}}}]}}}}'
+        oc patch dc recipe-app -p '{"spec":{"template":{"spec":{"containers":[{"name":"recipe-app-backend","resources":{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"200m","memory":"256Mi"}},"livenessProbe":{"httpGet":{"path":"/health","port":3000}},"livenessProbe":{"httpGet":{"path":"/health","port":3000}},"readinessProbe":{"httpGet":{"path":"/health","port":3000}},"readinessProbe":{"httpGet":{"path":"/health","port":3000}}}]}}}}' 

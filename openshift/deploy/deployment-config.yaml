@@ -1,0 +1,224 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recipe-app-config
+data:
+  BACKEND_URL: "http://recipe-app-backend:8080"
+  MONGODB_URI: "mongodb://mongodb:27017/recipes"
+  SPRING_PROFILES_ACTIVE: "prod"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-secret
+type: Opaque
+data:
+  username: $(echo -n "admin" | base64)
+  password: $(echo -n "password" | base64)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recipe-app-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recipe-app
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: recipe-app
+        component: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: ${REGISTRY}/${PROJECT_NAME}/recipe-app-frontend:latest
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: recipe-app-config
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recipe-app-frontend
+spec:
+  ports:
+  - port: 80
+    targetPort: 3000
+  selector:
+    app: recipe-app
+    component: frontend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recipe-app-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recipe-app
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: recipe-app
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: ${REGISTRY}/${PROJECT_NAME}/recipe-app-backend:latest
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: recipe-app-config
+        - secretRef:
+            name: mongodb-secret
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recipe-app-backend
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: recipe-app
+    component: backend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recipe-app
+      component: mongodb
+  template:
+    metadata:
+      labels:
+        app: recipe-app
+        component: mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:latest
+        ports:
+        - containerPort: 27017
+        envFrom:
+        - secretRef:
+            name: mongodb-secret
+        volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+      volumes:
+      - name: mongodb-data
+        persistentVolumeClaim:
+          claimName: mongodb-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+spec:
+  ports:
+  - port: 27017
+    targetPort: 27017
+  selector:
+    app: recipe-app
+    component: mongodb
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: recipe-app-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: recipe-app
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: recipe-app
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: recipe-app 

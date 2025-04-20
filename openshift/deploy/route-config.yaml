@@ -1,0 +1,10 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: recipe-app-route
+spec:
+  to:
+    kind: Service
+    name: recipe-app-frontend
+  port:
+    targetPort: 3000 

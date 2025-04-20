@@ -1,0 +1,45 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: recipe-app-frontend
+spec:
+  source:
+    type: Git
+    git:
+      uri: ${GIT_REPO}
+      ref: main
+    contextDir: frontend-ca2
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: recipe-app-frontend:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: recipe-app-backend
+spec:
+  source:
+    type: Git
+    git:
+      uri: ${GIT_REPO}
+      ref: main
+    contextDir: backend-ca2
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: recipe-app-backend:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange 

@@ -4,6 +4,7 @@ openshift.local.*
 *.swp
 *.swo
 *~
+!openshift/build/
 
 # Crossplane specific
 .crossplane/

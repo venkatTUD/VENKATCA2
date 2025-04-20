@@ -21,6 +21,11 @@ jobs:
         curl -L https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz | tar xvz
         sudo mv oc /usr/local/bin/
 
+    - name: Install Crossplane CLI
+      run: |
+        curl -sL https://raw.githubusercontent.com/crossplane/crossplane/master/install.sh | sh
+        sudo mv crossplane /usr/local/bin/
+
     - name: Login to OpenShift
       run: |
         oc login --server=${{ secrets.OPENSHIFT_SERVER }} \

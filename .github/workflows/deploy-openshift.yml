@@ -64,8 +64,13 @@ jobs:
 
     - name: Wait for builds to complete
       run: |
-        oc wait --for=condition=complete build/recipe-app-frontend --timeout=10m
-        oc wait --for=condition=complete build/recipe-app-backend --timeout=10m
+        # Get the latest build numbers
+        FRONTEND_BUILD=$(oc get builds --sort-by=.metadata.creationTimestamp -o name | grep recipe-app-frontend | tail -n 1)
+        BACKEND_BUILD=$(oc get builds --sort-by=.metadata.creationTimestamp -o name | grep recipe-app-backend | tail -n 1)
+        
+        # Wait for builds to complete
+        oc wait --for=condition=complete $FRONTEND_BUILD --timeout=10m
+        oc wait --for=condition=complete $BACKEND_BUILD --timeout=10m
 
     - name: Create deployment configuration
       run: |

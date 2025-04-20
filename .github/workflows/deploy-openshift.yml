@@ -25,6 +25,7 @@ jobs:
       run: |
         curl -sL https://raw.githubusercontent.com/crossplane/crossplane/master/install.sh | sh
         sudo mv crossplane /usr/local/bin/
+        crossplane --help
 
     - name: Login to OpenShift
       run: |
@@ -70,16 +71,13 @@ jobs:
         type: kubernetes.io/basic-auth
         stringData:
           username: ${{ secrets.REPO_USERNAME }}
-          password: ghp_${{ secrets.REPO_TOKEN }}
+          password: ${{ secrets.REPO_TOKEN }}
         EOF
 
     - name: Create or update build configurations
       run: |
         export REGISTRY=$REGISTRY
-        # Debug Git URL
-        echo "Using Git URL: https://${{ secrets.REPO_USERNAME }}:${{ secrets.REPO_TOKEN }}@github.com/venkatTUD/VENKATCA2.git"
-        
-        # Create build config with direct Git URL
+        # Create build config with local directory source
         oc apply -f - <<EOF
         apiVersion: build.openshift.io/v1
         kind: BuildConfig
@@ -87,16 +85,12 @@ jobs:
           name: recipe-app-frontend
         spec:
           source:
-            type: Git
-            git:
-              uri: https://${{ secrets.REPO_USERNAME }}:${{ secrets.REPO_TOKEN }}@github.com/venkatTUD/VENKATCA2.git
-              ref: main
-            contextDir: frontend-ca2
-            noCache: true
+            type: Binary
+            binary: {}
           strategy:
             type: Docker
             dockerStrategy:
-              dockerfilePath: Dockerfile
+              dockerfilePath: frontend-ca2/Dockerfile
           output:
             to:
               kind: ImageStreamTag
@@ -111,16 +105,12 @@ jobs:
           name: recipe-app-backend
         spec:
           source:
-            type: Git
-            git:
-              uri: https://${{ secrets.REPO_USERNAME }}:${{ secrets.REPO_TOKEN }}@github.com/venkatTUD/VENKATCA2.git
-              ref: main
-            contextDir: backend-ca2
-            noCache: true
+            type: Binary
+            binary: {}
           strategy:
             type: Docker
             dockerStrategy:
-              dockerfilePath: Dockerfile
+              dockerfilePath: backend-ca2/Dockerfile
           output:
             to:
               kind: ImageStreamTag
@@ -135,10 +125,13 @@ jobs:
         oc patch bc/recipe-app-frontend -p '{"spec":{"source":{"sourceSecret":null}}}'
         oc patch bc/recipe-app-backend -p '{"spec":{"source":{"sourceSecret":null}}}'
 
-    - name: Start builds
+    - name: Start builds with local source
       run: |
-        oc start-build recipe-app-frontend
-        oc start-build recipe-app-backend
+        # Start frontend build
+        oc start-build recipe-app-frontend --from-dir=frontend-ca2
+        
+        # Start backend build
+        oc start-build recipe-app-backend --from-dir=backend-ca2
 
     - name: Wait for builds to complete
       run: |

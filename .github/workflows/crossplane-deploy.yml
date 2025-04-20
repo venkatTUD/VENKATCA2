@@ -20,7 +20,7 @@ jobs:
     - name: Install Crossplane CLI
       run: |
         curl -sL https://raw.githubusercontent.com/crossplane/crossplane/master/install.sh | sh
-        sudo mv kubectl-crossplane /usr/local/bin/
+        sudo mv crossplane /usr/local/bin/
 
     - name: Install OpenShift CLI
       run: |

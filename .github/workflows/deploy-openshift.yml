@@ -51,17 +51,27 @@ jobs:
             local: false
         EOF
 
-    - name: Create GitHub credentials secret
+    - name: Create or update GitHub credentials secret
       run: |
-        oc create secret generic github-credentials \
-          --from-literal=username=${{ secrets.REPO_USERNAME }} \
-          --from-literal=password=${{ secrets.REPO_TOKEN }} \
-          --type=kubernetes.io/basic-auth
+        # Debug token format
+        echo "Token format: ${REPO_TOKEN:0:4}"
+        
+        # Create or update secret with proper token format
+        oc apply -f - <<EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: github-credentials
+        type: kubernetes.io/basic-auth
+        stringData:
+          username: ${{ secrets.REPO_USERNAME }}
+          password: ghp_${{ secrets.REPO_TOKEN }}
+        EOF
 
     - name: Create or update build configurations
       run: |
         export REGISTRY=$REGISTRY
-        export GIT_REPO=https://github.com/venkatTUD/VENKATCA2.git
+        export GIT_REPO=https://${{ secrets.REPO_USERNAME }}:${{ secrets.REPO_TOKEN }}@github.com/venkatTUD/VENKATCA2.git
         envsubst < openshift/build/build-config.yaml | oc apply -f -
 
     - name: Update build configurations with GitHub credentials

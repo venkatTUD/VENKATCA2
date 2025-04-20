@@ -123,10 +123,10 @@ jobs:
             - type: ImageChange
         EOF
 
-    - name: Update build configurations with GitHub credentials
+    - name: Remove GitHub credentials secret reference
       run: |
-        oc patch bc/recipe-app-frontend -p '{"spec":{"source":{"sourceSecret":{"name":"github-credentials"}}}}'
-        oc patch bc/recipe-app-backend -p '{"spec":{"source":{"sourceSecret":{"name":"github-credentials"}}}}'
+        oc patch bc/recipe-app-frontend -p '{"spec":{"source":{"sourceSecret":null}}}'
+        oc patch bc/recipe-app-backend -p '{"spec":{"source":{"sourceSecret":null}}}'
 
     - name: Start builds
       run: |
